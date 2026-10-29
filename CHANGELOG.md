@@ -1,5 +1,8 @@
 # Changelog
 
+## [v1.1.1] : 2026-10-29
+- Added CLAUDE.md dev notes.
+
 ## [v1.1.0] : 2026-10-29
 - New layout: 8 equal tiles on one screen, no scrolling.
 - Click a graph to enlarge it: drag to move, wheel to zoom, Now button.
