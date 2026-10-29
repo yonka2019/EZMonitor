@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.IO;
 using System.Security.Principal;
 using System.Windows;
 using System.Windows.Controls;
@@ -8,14 +9,19 @@ namespace EZMonitor;
 
 public partial class MainWindow : Window
 {
-    const int HistorySeconds = 10 * 60; // one sample per second
+    const int HistorySeconds = 24 * 3600; // one sample per second
+    const int SaveEvery = 5 * 60; // samples between history saves; the file is ≈3.5 MB
 
     readonly Settings _settings = Settings.Load();
     readonly Series _cpuTemp, _gpuTemp, _cpuLoad, _gpuLoad, _ram, _vram, _diskRead, _diskWrite, _netDown, _netUp;
+    readonly Dictionary<string, Series> _history;
     readonly TraceView[] _traces;
     readonly Tray _tray;
     readonly CancellationTokenSource _stop = new();
     readonly Task _loop;
+    Task _saving = Task.CompletedTask;
+    DateTime _lastSample;
+    int _unsaved;
     bool _exiting;
     TraceView? _expanded;
 
@@ -26,6 +32,12 @@ public partial class MainWindow : Window
         const int n = HistorySeconds;
         (_cpuTemp, _gpuTemp, _cpuLoad, _gpuLoad, _ram, _vram) = (new(n), new(n), new(n), new(n), new(n), new(n));
         (_diskRead, _diskWrite, _netDown, _netUp) = (new(n), new(n), new(n), new(n));
+        _history = new()
+        {
+            ["cpuTemp"] = _cpuTemp, ["gpuTemp"] = _gpuTemp, ["cpuLoad"] = _cpuLoad, ["gpuLoad"] = _gpuLoad, ["ram"] = _ram,
+            ["vram"] = _vram, ["diskRead"] = _diskRead, ["diskWrite"] = _diskWrite, ["netDown"] = _netDown, ["netUp"] = _netUp,
+        };
+        History.Load(History.Store, _history, DateTime.UtcNow);
         Setup(CpuTempTrace, "CPU temperature", _cpuTemp, TempText);
         Setup(GpuTempTrace, "GPU temperature", _gpuTemp, TempText);
         Setup(CpuLoadTrace, "CPU load", _cpuLoad, Percent);
@@ -37,6 +49,7 @@ public partial class MainWindow : Window
         _traces = [CpuTempTrace, GpuTempTrace, CpuLoadTrace, GpuLoadTrace, RamTrace, VramTrace, DiskTrace, NetTrace];
         foreach (var t in _traces) t.Expand += ExpandTrace;
         CloseExpanded.Click += (_, _) => CollapseTrace();
+        LiveExpanded.Click += (_, _) => { Expanded.Pan(-Expanded.Offset); Expanded.Focus(); };
         PreviewKeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Escape && _expanded is not null) { CollapseTrace(); e.Handled = true; } };
 
         CloseToTray.IsChecked = _settings.CloseToTray;
@@ -72,6 +85,8 @@ public partial class MainWindow : Window
         if (!_exiting && _settings.CloseToTray) { e.Cancel = true; Hide(); return; }
         _stop.Cancel();
         _loop.Wait(TimeSpan.FromSeconds(2));
+        _saving.Wait(TimeSpan.FromSeconds(5));
+        try { SaveHistory(); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         _tray.Dispose();
         Application.Current.Shutdown();
     }
@@ -83,9 +98,10 @@ public partial class MainWindow : Window
     {
         _expanded = t;
         ExpandedTitle.Text = t.Title;
+        Expanded.Live();
         ShowExpanded();
         Overlay.Visibility = Visibility.Visible;
-        CloseExpanded.Focus();
+        Expanded.Focus(); // arrows, +/- and End work straight away
     }
 
     void CollapseTrace()
@@ -136,8 +152,28 @@ public partial class MainWindow : Window
         catch (OperationCanceledException) { }
     }
 
+    /// <summary>Copies on the UI thread, writes in the background.</summary>
+    void SaveHistory(bool background = false)
+    {
+        var data = _history.ToDictionary(kv => kv.Key, kv => kv.Value.ToArray());
+        var newest = _lastSample == default ? DateTime.UtcNow : _lastSample;
+        if (!background) { History.Save(History.Store, data, newest); return; }
+        if (!_saving.IsCompleted) return;
+        _saving = Task.Run(() =>
+        {
+            try { History.Save(History.Store, data, newest); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } // next save retries
+        });
+    }
+
     void Render(Snapshot s)
     {
+        // Sleep or a stalled sensor read: pad with gaps so each index stays one second
+        var now = DateTime.UtcNow;
+        var missed = _lastSample == default ? 0 : Math.Max(0, (int)((now - _lastSample).TotalSeconds - 1.5));
+        foreach (var series in _history.Values) series.AddGap(missed);
+        _lastSample = now;
+
         _cpuTemp.Add(s.CpuTemp);
         _gpuTemp.Add(s.GpuTemp);
         _cpuLoad.Add(s.CpuLoad);
@@ -154,33 +190,31 @@ public partial class MainWindow : Window
 
         Temp(CpuTemp, s.CpuTemp);
         Temp(GpuTemp, s.GpuTemp);
-        CpuClock.Text = float.IsNaN(s.CpuClock) ? "" : $"{s.CpuClock / 1000:0.0} GHz";
-        CpuPower.Text = Watts(s.CpuPower);
-        GpuClock.Text = float.IsNaN(s.GpuClock) ? "" : $"{s.GpuClock:0} MHz";
-        GpuPower.Text = Watts(s.GpuPower);
+        CpuStats.Text = Stats(float.IsNaN(s.CpuClock) ? "" : $"{s.CpuClock / 1000:0.0} GHz", Watts(s.CpuPower));
+        GpuStats.Text = Stats(float.IsNaN(s.GpuClock) ? "" : $"{s.GpuClock:0} MHz", Watts(s.GpuPower));
 
         CpuLoad.Text = Percent(s.CpuLoad);
         GpuLoad.Text = Percent(s.GpuLoad);
-        Ram.Text = Of(s.RamUsed, s.RamTotal);
-        RamSub.Text = s.RamTotal > 0 ? Percent(100 * s.RamUsed / s.RamTotal) + " used" : "";
+        Ram.Text = Gb(s.RamUsed);
+        RamSub.Text = Of(s.RamUsed, s.RamTotal);
         RamTrace.Max = s.RamTotal;
-        Vram.Text = Of(s.VramUsed, s.VramTotal);
-        VramSub.Text = s.VramTotal > 0 ? Percent(100 * s.VramUsed / s.VramTotal) + " used" : "";
+        Vram.Text = Gb(s.VramUsed);
+        VramSub.Text = Of(s.VramUsed, s.VramTotal);
         VramTrace.Max = s.VramTotal;
-        DiskRead.Text = Rate(s.DiskRead) + " read";
+        DiskRead.Text = Rate(s.DiskRead);
         DiskWrite.Text = Rate(s.DiskWrite) + " write";
-        NetDown.Text = Rate(s.NetDown) + " down";
+        NetDown.Text = Rate(s.NetDown);
         NetUp.Text = Rate(s.NetUp) + " up";
 
-        Drives.ItemsSource = View(s.Drives);
-        Fans.ItemsSource = s.Fans.Count > 0 ? View(s.Fans) : View([new("", "None reported")]);
-        Temps.ItemsSource = s.Temps.Count > 0 ? View(s.Temps) : View([new("", "None reported")]);
+        Drives.ItemsSource = s.Drives;
+        Fans.ItemsSource = s.Fans.Count > 0 ? s.Fans : [new Reading("", "None reported")];
 
         foreach (var t in _traces) t.InvalidateVisual();
+        Expanded.Follow(missed + 1);
         ShowExpanded();
+        if (++_unsaved >= SaveEvery) { _unsaved = 0; SaveHistory(background: true); }
 
-        var hottest = float.IsNaN(s.CpuTemp) ? s.GpuTemp : float.IsNaN(s.GpuTemp) ? s.CpuTemp : Math.Max(s.CpuTemp, s.GpuTemp);
-        _tray.Update(hottest, $"EZMonitor\nCPU {TempText(s.CpuTemp)}  GPU {TempText(s.GpuTemp)}");
+        _tray.Update($"EZMonitor\nCPU {TempText(s.CpuTemp)}  GPU {TempText(s.GpuTemp)}");
     }
 
     static void Temp(TextBlock block, float c)
@@ -189,16 +223,13 @@ public partial class MainWindow : Window
         block.Foreground = Thermal.Brush(c);
     }
 
-    static readonly Brush InkBrush = (Brush)Application.Current.FindResource("Ink");
-
-    static List<object> View(IEnumerable<Reading> rows) =>
-        rows.Select(r => (object)new { r.Name, r.Value, Brush = float.IsNaN(r.Celsius) ? InkBrush : Thermal.Brush(r.Celsius) }).ToList();
-
     public static string TempText(float c) => float.IsNaN(c) ? "–" : $"{c:0}°";
     static string Gb(float v) => float.IsNaN(v) ? "–" : $"{v:0.0} GB";
     static string Percent(float v) => float.IsNaN(v) ? "–" : $"{v:0}%";
     static string Watts(float w) => float.IsNaN(w) ? "" : $"{w:0} W";
-    static string Of(float used, float total) => float.IsNaN(used) ? "–" : float.IsNaN(total) ? $"{used:0.0} GB" : $"{used:0.0} of {total:0.0} GB";
+    static string Stats(params string[] parts) => string.Join(" · ", parts.Where(p => p != ""));
+    /// <summary>"of 23.9 GB · 71% used"</summary>
+    static string Of(float used, float total) => float.IsNaN(used) || !(total > 0) ? "" : $"of {total:0.0} GB · {100 * used / total:0}% used";
 
     public static string Rate(float bytesPerSec) => bytesPerSec switch
     {

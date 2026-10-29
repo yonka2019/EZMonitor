@@ -19,6 +19,19 @@ static class SelfTest
             Check(Thermal.Of(52.5f) != Thermal.Of(40) && Thermal.Of(52.5f) != Thermal.Of(65), "thermal blends between stops");
             Check(Thermal.Of(float.NaN) == Thermal.Unknown, "no reading is grey");
 
+            var file = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ezmonitor-selftest.bin");
+            var now = DateTime.UtcNow;
+            History.Save(file, new Dictionary<string, float[]> { ["a"] = [1, 2], ["b"] = [3] }, now.AddSeconds(-10));
+            var (ha, hb, hc) = (new Series(100), new Series(100), new Series(100));
+            History.Load(file, new Dictionary<string, Series> { ["a"] = ha, ["b"] = hb, ["c"] = hc }, now);
+            System.IO.File.Delete(file);
+            Check(ha.Count == 11 && hb.Count == 11 && hc.Count == 11, "history keeps series aligned and pads closed time");
+            Check(ha[1] == 2 && float.IsNaN(hb[0]) && hb[1] == 3 && float.IsNaN(ha.Last), "history restores values");
+
+            var pan = new TraceView { A = ha, Window = 5, Offset = 2 };
+            pan.Follow(1);
+            Check(pan.Offset == 3, "panned view stays on the same moment");
+
             Check(MainWindow.Rate(float.NaN) == "–" && MainWindow.Rate(512_000) == "512 KB/s" && MainWindow.Rate(12_340_000) == "12.3 MB/s", "rate format");
             Check(MainWindow.TempText(54.4f) == "54°", "temp format");
             return 0;

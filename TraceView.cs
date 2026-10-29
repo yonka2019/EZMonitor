@@ -83,6 +83,14 @@ public sealed class TraceView : FrameworkElement
         InvalidateVisual();
     }
 
+    /// <summary>New samples arrived: a panned view stays on the same moment, a live one keeps up.</summary>
+    public void Follow(int added)
+    {
+        if (Offset == 0) return;
+        Offset = Math.Min(Offset + added, MaxOffset);
+        if (_dragX is not null) _dragOffset += added;
+    }
+
     /// <summary>Scrolls back in time (negative = towards now).</summary>
     public void Pan(int seconds)
     {

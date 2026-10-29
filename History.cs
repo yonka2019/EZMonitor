@@ -37,27 +37,30 @@ public static class History
     /// </summary>
     public static void Load(string path, IReadOnlyDictionary<string, Series> into, DateTime nowUtc)
     {
+        DateTime newest;
+        var read = new Dictionary<string, float[]>();
         try
         {
             using var r = new BinaryReader(File.OpenRead(path));
             if (r.ReadInt32() != Version) return;
-            var newest = new DateTime(r.ReadInt64(), DateTimeKind.Utc);
-            int count = r.ReadInt32(), longest = 0;
-            var loaded = new HashSet<Series>();
-            for (int k = 0; k < count; k++)
+            newest = new DateTime(r.ReadInt64(), DateTimeKind.Utc);
+            for (int k = r.ReadInt32(); k > 0; k--)
             {
                 var name = r.ReadString();
-                var data = MemoryMarshal.Cast<byte, float>(r.ReadBytes(r.ReadInt32() * sizeof(float)));
-                longest = Math.Max(longest, data.Length);
-                if (!into.TryGetValue(name, out var s)) continue;
-                foreach (var v in data) s.Add(v);
-                loaded.Add(s);
+                read[name] = MemoryMarshal.Cast<byte, float>(r.ReadBytes(r.ReadInt32() * sizeof(float))).ToArray();
             }
-            // Keep every series the same length so index i is the same second in all of them
-            foreach (var s in into.Values.Where(s => !loaded.Contains(s))) s.AddGap(longest);
-            var closed = (int)Math.Clamp((nowUtc - newest).TotalSeconds - 1, 0, int.MaxValue);
-            foreach (var s in into.Values) s.AddGap(closed);
         }
-        catch (Exception e) when (e is IOException or EndOfStreamException or UnauthorizedAccessException) { }
+        // Read fully before touching the series, so a damaged file leaves them empty and aligned
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException) { return; }
+
+        int longest = read.Values.Select(d => d.Length).DefaultIfEmpty().Max();
+        foreach (var (name, s) in into)
+        {
+            // Keep every series the same length so index i is the same second in all of them
+            if (read.TryGetValue(name, out var data)) { s.AddGap(longest - data.Length); foreach (var v in data) s.Add(v); }
+            else s.AddGap(longest);
+        }
+        var closed = (int)Math.Clamp((nowUtc - newest).TotalSeconds - 1, 0, int.MaxValue);
+        foreach (var s in into.Values) s.AddGap(closed);
     }
 }

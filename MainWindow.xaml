@@ -3,41 +3,44 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:EZMonitor"
         Title="EZMonitor" Icon="Assets/ezmonitor.ico"
-        Width="1120" Height="860" MinWidth="780" MinHeight="560"
+        Width="1120" Height="760" MinWidth="780" MinHeight="560"
         Background="{StaticResource Paper}" Foreground="{StaticResource Ink}"
         FontFamily="{StaticResource Face}" UseLayoutRounding="True">
     <Window.Resources>
-        <Style x:Key="Row" TargetType="Border">
-            <Setter Property="Padding" Value="20,14" />
-            <Setter Property="MinHeight" Value="76" />
+        <Style x:Key="Tile" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource Strip}" />
+            <Setter Property="Padding" Value="16,12" />
+            <Setter Property="Margin" Value="6" />
         </Style>
-        <Style x:Key="StripLabel" TargetType="TextBlock" BasedOn="{StaticResource Label}">
-            <Setter Property="FontSize" Value="17" />
-            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        <Style x:Key="TileLabel" TargetType="TextBlock" BasedOn="{StaticResource Label}">
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
+        <Style x:Key="TileIcon" TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="Foreground" Value="{StaticResource InkSoft}" />
+        </Style>
+        <Style x:Key="BigValue" TargetType="TextBlock" BasedOn="{StaticResource Value}">
+            <Setter Property="FontSize" Value="30" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+        </Style>
         <Style x:Key="Sub" TargetType="TextBlock" BasedOn="{StaticResource Label}">
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="Margin" Value="0,0,0,8" />
         </Style>
-        <Style x:Key="Big" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="132" />
-            <Setter Property="FontWeight" Value="Light" />
-            <Setter Property="FontStretch" Value="Condensed" />
-            <Setter Property="Margin" Value="-6,-6,0,-14" />
+        <Style TargetType="local:TraceView">
+            <Setter Property="MinHeight" Value="24" />
         </Style>
-        <Style x:Key="HeroStat" TargetType="TextBlock" BasedOn="{StaticResource Value}">
-            <Setter Property="FontSize" Value="26" />
-            <Setter Property="HorizontalAlignment" Value="Right" />
-        </Style>
-        <ItemsPanelTemplate x:Key="Wrap">
+        <ItemsPanelTemplate x:Key="Row">
             <WrapPanel />
         </ItemsPanelTemplate>
     </Window.Resources>
 
     <Grid>
-    <DockPanel Margin="32,24,32,0">
+    <DockPanel Margin="26,20,26,20">
         <!-- Header -->
-        <Grid DockPanel.Dock="Top" Margin="0,0,0,28">
+        <Grid DockPanel.Dock="Top" Margin="6,0,6,14">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -46,7 +49,12 @@
                 <TextBlock Text="EZMonitor" FontSize="26" FontWeight="SemiBold" />
                 <TextBlock x:Name="MachineText" Style="{StaticResource Label}" />
             </StackPanel>
-            <ToggleButton x:Name="SettingsButton" Grid.Column="1" Content="Settings" VerticalAlignment="Center" />
+            <ToggleButton x:Name="SettingsButton" Grid.Column="1" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE713;" FontSize="15" Margin="0,0,8,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" />
+                    <TextBlock Text="Settings" />
+                </StackPanel>
+            </ToggleButton>
             <Popup Grid.Column="1" PlacementTarget="{Binding ElementName=SettingsButton}" Placement="Bottom"
                    HorizontalOffset="-200" StaysOpen="False" AllowsTransparency="True"
                    IsOpen="{Binding IsChecked, ElementName=SettingsButton}">
@@ -63,156 +71,143 @@
         </Grid>
 
         <!-- Shown when the sensor driver or admin rights are missing -->
-        <Border x:Name="Notice" DockPanel.Dock="Top" Background="#EBDCB9" Padding="20,12" Margin="0,0,0,24" Visibility="Collapsed">
+        <Border x:Name="Notice" DockPanel.Dock="Top" Background="#EBDCB9" Padding="20,12" Margin="6,0,6,8" Visibility="Collapsed">
             <TextBlock x:Name="NoticeText" FontSize="15" TextWrapping="Wrap" />
         </Border>
 
-        <!-- Hero: the two temperatures -->
-        <Grid DockPanel.Dock="Top" Margin="0,0,0,28">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition />
-                <ColumnDefinition Width="48" />
-                <ColumnDefinition />
-            </Grid.ColumnDefinitions>
-            <StackPanel>
-                <TextBlock x:Name="CpuName" Style="{StaticResource Label}" FontSize="17" Text="Processor" />
-                <Grid>
-                    <TextBlock x:Name="CpuTemp" Style="{StaticResource Big}" Text="–" />
-                    <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Right">
-                        <TextBlock x:Name="CpuClock" Style="{StaticResource HeroStat}" />
-                        <TextBlock x:Name="CpuPower" Style="{StaticResource HeroStat}" />
-                    </StackPanel>
-                </Grid>
-                <Border Background="{StaticResource Strip}" Margin="0,14,0,0">
-                    <local:TraceView x:Name="CpuTempTrace" Height="110" Min="20" Max="100" Thermal="True" />
-                </Border>
-            </StackPanel>
-            <StackPanel Grid.Column="2">
-                <TextBlock x:Name="GpuName" Style="{StaticResource Label}" FontSize="17" Text="Graphics" />
-                <Grid>
-                    <TextBlock x:Name="GpuTemp" Style="{StaticResource Big}" Text="–" />
-                    <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Right">
-                        <TextBlock x:Name="GpuClock" Style="{StaticResource HeroStat}" />
-                        <TextBlock x:Name="GpuPower" Style="{StaticResource HeroStat}" />
-                    </StackPanel>
-                </Grid>
-                <Border Background="{StaticResource Strip}" Margin="0,14,0,0">
-                    <local:TraceView x:Name="GpuTempTrace" Height="110" Min="20" Max="100" Thermal="True" />
-                </Border>
-            </StackPanel>
-        </Grid>
+        <!-- Drives and fans: one thin line -->
+        <Border DockPanel.Dock="Bottom" Style="{StaticResource Tile}" Padding="16,10">
+            <DockPanel>
+                <TextBlock Style="{StaticResource TileIcon}" Text="&#xE967;" />
+                <TextBlock Text="Drives" Style="{StaticResource TileLabel}" Margin="0,0,14,0" />
+                <ItemsControl x:Name="Drives" ItemsPanel="{StaticResource Row}" ItemTemplate="{StaticResource ReadingTemplate}" Focusable="False" VerticalAlignment="Center" />
+                <TextBlock Style="{StaticResource TileIcon}" Text="&#xE9F3;" Margin="18,0,8,0" />
+                <TextBlock Text="Fans" Style="{StaticResource TileLabel}" Margin="0,0,14,0" />
+                <ItemsControl x:Name="Fans" ItemsPanel="{StaticResource Row}" ItemTemplate="{StaticResource ReadingTemplate}" Focusable="False" VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
 
-        <!-- Strips: one metric per row, value then its trace -->
-        <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
-            <StackPanel Margin="0,0,0,24">
-                <StackPanel.Resources>
-                    <Style TargetType="local:TraceView">
-                        <Setter Property="Grid.Column" Value="2" />
-                        <Setter Property="Height" Value="46" />
-                    </Style>
-                </StackPanel.Resources>
+        <!-- Eight equal tiles: load and memory on top, temps and I/O below. Click a graph to open 24 h. -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
 
-                <Border Style="{StaticResource Row}" Background="{StaticResource Strip}">
-                    <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="260" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                        <TextBlock Text="CPU load" Style="{StaticResource StripLabel}" />
-                        <TextBlock x:Name="CpuLoad" Grid.Column="1" Style="{StaticResource Value}" VerticalAlignment="Center" />
+            <UniformGrid Columns="4">
+                <Border Style="{StaticResource Tile}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top">
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource TileIcon}" Text="&#xE950;" /><TextBlock Text="CPU load" Style="{StaticResource TileLabel}" /></StackPanel>
+                            <TextBlock x:Name="CpuLoad" Style="{StaticResource BigValue}" Text="–" />
+                            <TextBlock x:Name="CpuName" Style="{StaticResource Sub}" Text="Processor" />
+                        </StackPanel>
                         <local:TraceView x:Name="CpuLoadTrace" Max="100" />
-                    </Grid>
+                    </DockPanel>
                 </Border>
-                <Border Style="{StaticResource Row}">
-                    <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="260" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                        <TextBlock Text="GPU load" Style="{StaticResource StripLabel}" />
-                        <TextBlock x:Name="GpuLoad" Grid.Column="1" Style="{StaticResource Value}" VerticalAlignment="Center" />
+                <Border Style="{StaticResource Tile}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top">
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource TileIcon}" Text="&#xEEA0;" /><TextBlock Text="GPU load" Style="{StaticResource TileLabel}" /></StackPanel>
+                            <TextBlock x:Name="GpuLoad" Style="{StaticResource BigValue}" Text="–" />
+                            <TextBlock x:Name="GpuName" Style="{StaticResource Sub}" Text="Graphics" />
+                        </StackPanel>
                         <local:TraceView x:Name="GpuLoadTrace" Max="100" />
-                    </Grid>
+                    </DockPanel>
                 </Border>
-                <Border Style="{StaticResource Row}" Background="{StaticResource Strip}">
-                    <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="260" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                        <TextBlock Text="Memory" Style="{StaticResource StripLabel}" />
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock x:Name="Ram" Style="{StaticResource Value}" />
-                            <TextBlock x:Name="RamSub" Style="{StaticResource Sub}" />
+                <Border Style="{StaticResource Tile}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top">
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource TileIcon}" Text="&#xE964;" /><TextBlock Text="Memory" Style="{StaticResource TileLabel}" /></StackPanel>
+                            <TextBlock x:Name="Ram" Style="{StaticResource BigValue}" Text="–" />
+                            <TextBlock x:Name="RamSub" Style="{StaticResource Sub}" Text=" " />
                         </StackPanel>
                         <local:TraceView x:Name="RamTrace" />
-                    </Grid>
+                    </DockPanel>
                 </Border>
-                <Border Style="{StaticResource Row}">
-                    <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="260" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                        <TextBlock Text="Video memory" Style="{StaticResource StripLabel}" />
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock x:Name="Vram" Style="{StaticResource Value}" />
-                            <TextBlock x:Name="VramSub" Style="{StaticResource Sub}" />
+                <Border Style="{StaticResource Tile}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top">
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource TileIcon}" Text="&#xEEA0;" /><TextBlock Text="Video memory" Style="{StaticResource TileLabel}" /></StackPanel>
+                            <TextBlock x:Name="Vram" Style="{StaticResource BigValue}" Text="–" />
+                            <TextBlock x:Name="VramSub" Style="{StaticResource Sub}" Text=" " />
                         </StackPanel>
                         <local:TraceView x:Name="VramTrace" />
-                    </Grid>
+                    </DockPanel>
                 </Border>
-                <Border Style="{StaticResource Row}" Background="{StaticResource Strip}">
-                    <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="260" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                        <TextBlock Text="Disk" Style="{StaticResource StripLabel}" />
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock x:Name="DiskRead" Style="{StaticResource Value}" />
-                            <TextBlock x:Name="DiskWrite" Style="{StaticResource Sub}" />
+            </UniformGrid>
+
+            <UniformGrid Grid.Row="1" Columns="4">
+                <Border Style="{StaticResource Tile}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top">
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource TileIcon}" Text="&#xE9CA;" /><TextBlock Text="CPU temp" Style="{StaticResource TileLabel}" /></StackPanel>
+                            <TextBlock x:Name="CpuTemp" Style="{StaticResource BigValue}" Text="–" />
+                            <TextBlock x:Name="CpuStats" Style="{StaticResource Sub}" Text=" " />
+                        </StackPanel>
+                        <local:TraceView x:Name="CpuTempTrace" Min="20" Max="100" Thermal="True" />
+                    </DockPanel>
+                </Border>
+                <Border Style="{StaticResource Tile}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top">
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource TileIcon}" Text="&#xE9CA;" /><TextBlock Text="GPU temp" Style="{StaticResource TileLabel}" /></StackPanel>
+                            <TextBlock x:Name="GpuTemp" Style="{StaticResource BigValue}" Text="–" />
+                            <TextBlock x:Name="GpuStats" Style="{StaticResource Sub}" Text=" " />
+                        </StackPanel>
+                        <local:TraceView x:Name="GpuTempTrace" Min="20" Max="100" Thermal="True" />
+                    </DockPanel>
+                </Border>
+                <Border Style="{StaticResource Tile}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top">
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource TileIcon}" Text="&#xEDA2;" /><TextBlock Text="Disk" Style="{StaticResource TileLabel}" /></StackPanel>
+                            <TextBlock x:Name="DiskRead" Style="{StaticResource BigValue}" Text="–" />
+                            <TextBlock x:Name="DiskWrite" Style="{StaticResource Sub}" Text=" " />
                         </StackPanel>
                         <local:TraceView x:Name="DiskTrace" Floor="1048576" />
-                    </Grid>
+                    </DockPanel>
                 </Border>
-                <Border Style="{StaticResource Row}">
-                    <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="260" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                        <TextBlock Text="Network" Style="{StaticResource StripLabel}" />
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock x:Name="NetDown" Style="{StaticResource Value}" />
-                            <TextBlock x:Name="NetUp" Style="{StaticResource Sub}" />
+                <Border Style="{StaticResource Tile}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top">
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource TileIcon}" Text="&#xE839;" /><TextBlock Text="Network" Style="{StaticResource TileLabel}" /></StackPanel>
+                            <TextBlock x:Name="NetDown" Style="{StaticResource BigValue}" Text="–" />
+                            <TextBlock x:Name="NetUp" Style="{StaticResource Sub}" Text=" " />
                         </StackPanel>
                         <local:TraceView x:Name="NetTrace" Floor="102400" />
-                    </Grid>
+                    </DockPanel>
                 </Border>
-                <Border Style="{StaticResource Row}" Background="{StaticResource Strip}">
-                    <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                        <TextBlock Text="Drives" Style="{StaticResource StripLabel}" VerticalAlignment="Top" Margin="0,2,0,0" />
-                        <ItemsControl x:Name="Drives" Grid.Column="1" ItemsPanel="{StaticResource Wrap}" ItemTemplate="{StaticResource ReadingTemplate}" Focusable="False" />
-                    </Grid>
-                </Border>
-                <Border Style="{StaticResource Row}">
-                    <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                        <TextBlock Text="Fans" Style="{StaticResource StripLabel}" VerticalAlignment="Top" Margin="0,2,0,0" />
-                        <ItemsControl x:Name="Fans" Grid.Column="1" ItemsPanel="{StaticResource Wrap}" ItemTemplate="{StaticResource ReadingTemplate}" Focusable="False" />
-                    </Grid>
-                </Border>
-                <Border Style="{StaticResource Row}" Background="{StaticResource Strip}">
-                    <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                        <TextBlock Text="Temperatures" Style="{StaticResource StripLabel}" VerticalAlignment="Top" Margin="0,2,0,0" />
-                        <ItemsControl x:Name="Temps" Grid.Column="1" ItemsPanel="{StaticResource Wrap}" ItemTemplate="{StaticResource ReadingTemplate}" Focusable="False" />
-                    </Grid>
-                </Border>
-            </StackPanel>
-        </ScrollViewer>
+            </UniformGrid>
+        </Grid>
     </DockPanel>
 
-    <!-- One graph filling the window; click any graph to open, Esc closes -->
+    <!-- One graph filling the window; drag moves through the last 24 h, wheel zooms, Esc closes -->
     <DockPanel x:Name="Overlay" Background="{StaticResource Paper}" Visibility="Collapsed">
         <Grid DockPanel.Dock="Top" Margin="32,24,32,20">
             <StackPanel>
                 <TextBlock x:Name="ExpandedTitle" FontSize="26" FontWeight="SemiBold" />
                 <TextBlock x:Name="ExpandedValue" Style="{StaticResource Label}" FontSize="17" />
             </StackPanel>
-            <Button x:Name="CloseExpanded" Content="Close" Style="{StaticResource Chip}" HorizontalAlignment="Right" VerticalAlignment="Top" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                <Button x:Name="LiveExpanded" Style="{StaticResource Chip}" ToolTip="Back to now (End)">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE893;" FontSize="14" Margin="0,0,8,0" />
+                        <TextBlock Text="Now" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="CloseExpanded" Style="{StaticResource Chip}" ToolTip="Close (Esc)">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE711;" FontSize="14" Margin="0,0,8,0" />
+                        <TextBlock Text="Close" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
         </Grid>
-        <Grid DockPanel.Dock="Bottom" Margin="32,8,32,24">
-            <TextBlock Text="10 min ago" Style="{StaticResource Label}" />
-            <TextBlock Text="5 min ago" Style="{StaticResource Label}" HorizontalAlignment="Center" />
-            <TextBlock Text="now" Style="{StaticResource Label}" HorizontalAlignment="Right" />
-        </Grid>
+        <TextBlock DockPanel.Dock="Bottom" Margin="32,8,32,24" Style="{StaticResource Label}"
+                   Text="Drag to move · Wheel to zoom · Keeps 24 h" />
         <Border Background="{StaticResource Strip}" Margin="32,0">
-            <local:TraceView x:Name="Expanded" ShowScale="True" Cursor="Cross" Focusable="False" />
+            <local:TraceView x:Name="Expanded" ShowScale="True" Interactive="True" Cursor="SizeWE" />
         </Border>
     </DockPanel>
     </Grid>

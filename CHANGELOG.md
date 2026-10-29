@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.1.0] : 2026-10-29
+- New layout: 8 equal tiles on one screen, no scrolling.
+- Click a graph to enlarge it: drag to move, wheel to zoom, Now button.
+- Keeps 24 h of history on disk (saved every 5 min + on exit).
+- Drives and fans in a slim bottom bar.
+- Tray shows the app icon; hover for CPU/GPU °C.
+
 ## [v1.0.0] : 2026-10-29
 - First release: WPF hardware monitor (temps, CPU, GPU, RAM, VRAM, disk, network, drives, fans).
 - Live strip charts, 10 min history, hover + expand view.

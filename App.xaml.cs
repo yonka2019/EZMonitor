@@ -23,7 +23,6 @@ public partial class App : Application
     /// <summary>--snap file.png: renders the window after 12 s of samples, then exits. For checking the layout.</summary>
     static async void Snap(Window window, string path)
     {
-        window.Height = 1500;
         await Task.Delay(12_000);
         var root = (FrameworkElement)window.Content;
         var size = new Rect(0, 0, root.ActualWidth, root.ActualHeight);

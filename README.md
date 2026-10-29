@@ -7,9 +7,11 @@ Windows hardware monitor (WPF, .NET 10). Shows temps, CPU, GPU, RAM, VRAM, disk,
 - **PawnIO driver** for CPU temp/clock/power and board fans: https://pawnio.eu. Without it those show `–`.
 
 ## Use
-- Graphs keep the last 10 min. Hover a graph for value + time. Click (or Enter) to expand; Esc closes.
+- One screen, no scrolling. Tiles show the last 10 min. Hover a graph for value + time. Click (or Enter) to expand; Esc closes.
+- Expanded graph: drag to move back in time, wheel to zoom, End or **Now** jumps back.
+- Keeps 24 h, saved every 5 min and on exit (`%LOCALAPPDATA%\EZMonitor\history.bin`, ≈3.5 MB). Closed time shows as a gap.
 - Settings: start with Windows (logon task, opens in tray), close to tray.
-- Tray icon shows the hottest of CPU/GPU in °C. Left click opens, right click → Exit.
+- Tray: app icon; hover shows CPU/GPU °C. Left click opens, right click → Exit.
 - Settings file: `%APPDATA%\EZMonitor\settings.json`.
 
 ## Build

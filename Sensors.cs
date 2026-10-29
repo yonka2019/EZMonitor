@@ -5,7 +5,7 @@ using LibreHardwareMonitor.Hardware;
 
 namespace EZMonitor;
 
-public sealed record Reading(string Name, string Value, float Celsius = float.NaN);
+public sealed record Reading(string Name, string Value);
 
 /// <summary>One second of readings. NaN = sensor not available.</summary>
 public sealed record Snapshot(
@@ -13,7 +13,7 @@ public sealed record Snapshot(
     float GpuTemp, float GpuLoad, float GpuClock, float GpuPower,
     float RamUsed, float RamTotal, float VramUsed, float VramTotal,
     float DiskRead, float DiskWrite, float NetDown, float NetUp,
-    IReadOnlyList<Reading> Drives, IReadOnlyList<Reading> Fans, IReadOnlyList<Reading> Temps);
+    IReadOnlyList<Reading> Drives, IReadOnlyList<Reading> Fans);
 
 /// <summary>Reads hardware sensors. Not thread-safe: call from one thread.</summary>
 public sealed class Sensors : IDisposable
@@ -69,18 +69,8 @@ public sealed class Sensors : IDisposable
             NetDown: down, NetUp: up,
             Drives: Drives(),
             Fans: all.SelectMany(h => h.Sensors.Where(s => s.SensorType == SensorType.Fan && s.Value is not null)
-                .Select(s => new Reading(Label(h, s), $"{s.Value:0} rpm"))).ToList(),
-            Temps: all.SelectMany(h => h.Sensors.Where(s => s.SensorType == SensorType.Temperature && s.Value is > 0 && IsExtraTemp(h, s))
-                .Select(s => new Reading(Label(h, s), $"{s.Value:0}°", s.Value!.Value))).ToList());
+                .Select(s => new Reading(Label(h, s), $"{s.Value:0} rpm"))).ToList());
     }
-
-    // Per-core and TjMax-distance temps are noise next to the package reading shown up top
-    bool IsExtraTemp(IHardware h, ISensor s) => h.HardwareType switch
-    {
-        HardwareType.Cpu => false,
-        _ when h == Gpu => s.Name != "GPU Core",
-        _ => true,
-    };
 
     static string Label(IHardware h, ISensor s) => s.Name.StartsWith("Temperature") || s.Name.StartsWith("Composite")
         ? h.Name + s.Name.Replace("Temperature", "").Replace("Composite", "")

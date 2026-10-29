@@ -67,12 +67,12 @@
             <Setter Property="Margin" Value="0,6" />
         </Style>
 
-        <!-- Name above, value below; used for drives, fans, temperatures -->
+        <!-- Value then name on one line; used for drives and fans -->
         <DataTemplate x:Key="ReadingTemplate">
-            <StackPanel Margin="0,0,32,8">
-                <TextBlock Text="{Binding Value}" FontSize="18" FontStretch="SemiCondensed" Foreground="{Binding Brush}" />
-                <TextBlock Text="{Binding Name}" FontSize="13" Foreground="{StaticResource InkSoft}" />
-            </StackPanel>
+            <TextBlock Margin="0,0,22,0" VerticalAlignment="Center">
+                <Run Text="{Binding Value, Mode=OneWay}" FontSize="16" FontStretch="SemiCondensed" Foreground="{StaticResource Ink}" />
+                <Run Text="{Binding Name, Mode=OneWay}" FontSize="13" Foreground="{StaticResource InkSoft}" />
+            </TextBlock>
         </DataTemplate>
     </Application.Resources>
 </Application>
