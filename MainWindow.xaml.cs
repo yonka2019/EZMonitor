@@ -10,11 +10,12 @@ namespace EZMonitor;
 public partial class MainWindow : Window
 {
     const int HistorySeconds = 24 * 3600; // one sample per second
-    const int SaveEvery = 5 * 60; // samples between history saves; the file is ≈3.5 MB
+    const int SaveEvery = 5 * 60; // samples between history saves; the files are ≈3.5 + 10 MB
 
     readonly Settings _settings = Settings.Load();
     readonly Series _cpuTemp, _gpuTemp, _cpuLoad, _gpuLoad, _ram, _vram, _diskRead, _diskWrite, _netDown, _netUp;
     readonly Dictionary<string, Series> _history;
+    readonly AppHistory _apps = new(HistorySeconds);
     readonly TraceView[] _traces;
     readonly Tray _tray;
     readonly CancellationTokenSource _stop = new();
@@ -24,6 +25,7 @@ public partial class MainWindow : Window
     int _unsaved;
     bool _exiting;
     TraceView? _expanded;
+    (bool Ram, long Second)? _appsShown;
 
     public MainWindow()
     {
@@ -37,7 +39,9 @@ public partial class MainWindow : Window
             ["cpuTemp"] = _cpuTemp, ["gpuTemp"] = _gpuTemp, ["cpuLoad"] = _cpuLoad, ["gpuLoad"] = _gpuLoad, ["ram"] = _ram,
             ["vram"] = _vram, ["diskRead"] = _diskRead, ["diskWrite"] = _diskWrite, ["netDown"] = _netDown, ["netUp"] = _netUp,
         };
-        History.Load(History.Store, _history, DateTime.UtcNow);
+        var now = DateTime.UtcNow;
+        History.Load(History.Store, _history, now);
+        _apps.Load(AppHistory.Store, now);
         Setup(CpuTempTrace, "CPU temperature", _cpuTemp, TempText);
         Setup(GpuTempTrace, "GPU temperature", _gpuTemp, TempText);
         Setup(CpuLoadTrace, "CPU load", _cpuLoad, Percent);
@@ -49,6 +53,7 @@ public partial class MainWindow : Window
         _traces = [CpuTempTrace, GpuTempTrace, CpuLoadTrace, GpuLoadTrace, RamTrace, VramTrace, DiskTrace, NetTrace];
         foreach (var t in _traces) t.Expand += ExpandTrace;
         CloseExpanded.Click += (_, _) => CollapseTrace();
+        Expanded.Changed += ShowApps;
         LiveExpanded.Click += (_, _) => { Expanded.Pan(-Expanded.Offset); Expanded.Focus(); };
         PreviewKeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Escape && _expanded is not null) { CollapseTrace(); e.Handled = true; } };
 
@@ -108,6 +113,7 @@ public partial class MainWindow : Window
     {
         var t = _expanded;
         _expanded = null;
+        _appsShown = null;
         Overlay.Visibility = Visibility.Collapsed;
         t?.Focus();
     }
@@ -118,7 +124,27 @@ public partial class MainWindow : Window
         Expanded.CopyFrom(_expanded); // copies each tick: memory scales change with the totals
         ExpandedValue.Text = _expanded.Describe(_expanded.A!.Count - 1);
         Expanded.InvalidateVisual();
+        ShowApps();
     }
+
+    /// <summary>Top 10 apps at the hovered second (or the right edge) under the CPU load and memory graphs.</summary>
+    void ShowApps()
+    {
+        var ram = _expanded == RamTrace;
+        Apps.Visibility = ram || _expanded == CpuLoadTrace ? Visibility.Visible : Visibility.Collapsed;
+        if (Apps.Visibility != Visibility.Visible) { _appsShown = null; return; }
+        var age = Expanded.FocusAge;
+        if (_appsShown == (ram, _apps.Added - age)) return; // same second already shown
+        _appsShown = (ram, _apps.Added - age);
+
+        var top = _apps.At(age, ram);
+        AppsTitle.Text = $"Top apps by {(ram ? "memory" : "CPU")} · {TraceView.Ago(age)}" + (top.Count == 0 ? " · no data" : "");
+        var rows = top.Select((a, k) => new AppRow($"{k + 1}", a.Name, ram ? Bytes(a.Value) : Share(a.Value))).ToList();
+        AppsLeft.ItemsSource = rows.Take(AppHistory.Top / 2).ToList();
+        AppsRight.ItemsSource = rows.Skip(AppHistory.Top / 2).ToList();
+    }
+
+    public sealed record AppRow(string Rank, string Name, string Value);
 
     void ShowNotice()
     {
@@ -132,6 +158,7 @@ public partial class MainWindow : Window
     async Task Poll()
     {
         using var sensors = new Sensors();
+        var apps = new AppSampler();
         await Dispatcher.InvokeAsync(() =>
         {
             CpuName.Text = sensors.Cpu?.Name ?? "Processor";
@@ -145,7 +172,10 @@ public partial class MainWindow : Window
                 Snapshot s;
                 try { s = sensors.Read(); }
                 catch { continue; } // a sensor hiccup skips one sample, not the app
-                await Dispatcher.InvokeAsync(() => Render(s));
+                AppTop? top;
+                try { top = apps.Read(); }
+                catch { top = null; } // no app list this second; the graphs still update
+                await Dispatcher.InvokeAsync(() => Render(s, top));
             }
             while (await timer.WaitForNextTickAsync(_stop.Token));
         }
@@ -155,23 +185,26 @@ public partial class MainWindow : Window
     /// <summary>Copies on the UI thread, writes in the background.</summary>
     void SaveHistory(bool background = false)
     {
+        if (background && !_saving.IsCompleted) return;
         var data = _history.ToDictionary(kv => kv.Key, kv => kv.Value.ToArray());
+        var apps = _apps.Copy();
         var newest = _lastSample == default ? DateTime.UtcNow : _lastSample;
-        if (!background) { History.Save(History.Store, data, newest); return; }
-        if (!_saving.IsCompleted) return;
+        void Write() { History.Save(History.Store, data, newest); AppHistory.Save(AppHistory.Store, apps, newest); }
+        if (!background) { Write(); return; }
         _saving = Task.Run(() =>
         {
-            try { History.Save(History.Store, data, newest); }
+            try { Write(); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } // next save retries
         });
     }
 
-    void Render(Snapshot s)
+    void Render(Snapshot s, AppTop? top)
     {
         // Sleep or a stalled sensor read: pad with gaps so each index stays one second
         var now = DateTime.UtcNow;
         var missed = _lastSample == default ? 0 : Math.Max(0, (int)((now - _lastSample).TotalSeconds - 1.5));
         foreach (var series in _history.Values) series.AddGap(missed);
+        _apps.AddGap(missed);
         _lastSample = now;
 
         _cpuTemp.Add(s.CpuTemp);
@@ -184,6 +217,7 @@ public partial class MainWindow : Window
         _diskWrite.Add(s.DiskWrite);
         _netDown.Add(s.NetDown);
         _netUp.Add(s.NetUp);
+        _apps.Add(top);
 
         var up = TimeSpan.FromMilliseconds(Environment.TickCount64);
         MachineText.Text = $"{Environment.MachineName}, up {(int)up.TotalHours} h {up.Minutes} min";
@@ -226,6 +260,10 @@ public partial class MainWindow : Window
     public static string TempText(float c) => float.IsNaN(c) ? "–" : $"{c:0}°";
     static string Gb(float v) => float.IsNaN(v) ? "–" : $"{v:0.0} GB";
     static string Percent(float v) => float.IsNaN(v) ? "–" : $"{v:0}%";
+    /// <summary>One app's CPU share: decimals only when small.</summary>
+    public static string Share(float v) => v < 10 ? $"{v:0.0}%" : $"{v:0}%";
+    /// <summary>Binary units, like Task Manager.</summary>
+    public static string Bytes(float v) => v >= 1 << 30 ? $"{v / (1 << 30):0.0} GB" : $"{v / (1 << 20):0} MB";
     static string Watts(float w) => float.IsNaN(w) ? "" : $"{w:0} W";
     static string Stats(params string[] parts) => string.Join(" · ", parts.Where(p => p != ""));
     /// <summary>"of 23.9 GB · 71% used"</summary>

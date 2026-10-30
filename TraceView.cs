@@ -39,6 +39,8 @@ public sealed class TraceView : FrameworkElement
     const double Gutter = 22;
 
     public event Action<TraceView>? Expand;
+    /// <summary>Hover, pan or zoom moved FocusAge.</summary>
+    public event Action? Changed;
 
     static readonly Typeface Face = new("Bahnschrift");
     static readonly Brush Paper = Frozen(new SolidColorBrush(Color.FromRgb(0xE4, 0xE8, 0xEA)));
@@ -77,10 +79,25 @@ public sealed class TraceView : FrameworkElement
     int AgeAt(double x) => Offset + (int)Math.Round((ActualWidth - x) / Step);
     int MaxOffset => Math.Max(0, (A?.Count ?? 0) - Window);
 
+    /// <summary>Second under the mouse, else the right edge.</summary>
+    public int FocusAge => _hover is Point p && p.Y <= PlotHeight ? HoverAge(p.X) : Offset;
+
+    /// <summary>Second under x. Zoomed out a pixel column holds many: the one with A's peak, as drawn.</summary>
+    int HoverAge(double x)
+    {
+        int age = AgeAt(x), col = (int)Math.Floor(XOf(age)), best = age;
+        float V(int a) => A is not null && a >= 0 && a < A.Count ? A[A.Count - 1 - a] : float.NaN;
+        for (int dir = -1; dir <= 1; dir += 2)
+            for (int a = age + dir; a >= Offset && (int)Math.Floor(XOf(a)) == col; a += dir)
+                if (V(a) > V(best) || float.IsNaN(V(best))) best = a;
+        return best;
+    }
+
     public void Live()
     {
         (Window, Offset) = (DefaultWindow, 0);
         InvalidateVisual();
+        Changed?.Invoke();
     }
 
     /// <summary>New samples arrived: a panned view stays on the same moment, a live one keeps up.</summary>
@@ -96,6 +113,7 @@ public sealed class TraceView : FrameworkElement
     {
         Offset = Math.Clamp(Offset + seconds, 0, MaxOffset);
         InvalidateVisual();
+        Changed?.Invoke();
     }
 
     /// <summary>factor &lt; 1 zooms in. Keeps the moment under atX in place.</summary>
@@ -106,6 +124,7 @@ public sealed class TraceView : FrameworkElement
         Window = (int)Math.Clamp(Math.Round(Window * factor), MinWindow, Math.Max(MinWindow, A?.Capacity ?? Window));
         Offset = Math.Clamp((int)Math.Round(anchor - fromRight * Window), 0, MaxOffset);
         InvalidateVisual();
+        Changed?.Invoke();
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -115,12 +134,14 @@ public sealed class TraceView : FrameworkElement
         if (_dragX is double x0 && IsMouseCaptured)
             Offset = Math.Clamp(_dragOffset + (int)Math.Round((p.X - x0) / Step), 0, MaxOffset);
         InvalidateVisual();
+        Changed?.Invoke();
     }
 
     protected override void OnMouseLeave(MouseEventArgs e)
     {
         _hover = null;
         InvalidateVisual();
+        Changed?.Invoke();
     }
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
@@ -192,7 +213,7 @@ public sealed class TraceView : FrameworkElement
         }
 
         if (_hover is not Point p || p.Y > h) return;
-        int age = AgeAt(p.X), i = A.Count - 1 - age;
+        int age = HoverAge(p.X), i = A.Count - 1 - age;
         if (i < 0 || i >= A.Count) return; // nothing recorded that far back
         var x = XOf(age);
         dc.DrawRectangle(Box, null, new Rect(x - 0.5, 0, 1, h));

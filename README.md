@@ -9,7 +9,9 @@ Windows hardware monitor (WPF, .NET 10). Shows temps, CPU, GPU, RAM, VRAM, disk,
 ## Use
 - One screen, no scrolling. Tiles show the last 10 min. Hover a graph for value + time. Click (or Enter) to expand; Esc closes.
 - Expanded graph: drag to move back in time, wheel to zoom, End or **Now** jumps back.
-- Keeps 24 h, saved every 5 min and on exit (`%LOCALAPPDATA%\EZMonitor\history.bin`, ≈3.5 MB). Closed time shows as a gap.
+- Expanded CPU load / Memory: top 10 apps at the hovered second (else the right edge). Same-name processes summed. Memory = private (like Task Manager).
+- Keeps 24 h, saved every 5 min and on exit (`%LOCALAPPDATA%\EZMonitor\history.bin` ≈3.5 MB, `apps.bin` ≈10 MB). Closed time shows as a gap.
+- Reads everything once per second.
 - Settings: start with Windows (logon task, opens in tray), close to tray.
 - Tray: app icon; hover shows CPU/GPU °C. Left click opens, right click → Exit.
 - Settings file: `%APPDATA%\EZMonitor\settings.json`.

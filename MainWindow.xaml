@@ -32,6 +32,19 @@
         <Style TargetType="local:TraceView">
             <Setter Property="MinHeight" Value="24" />
         </Style>
+        <!-- Top apps table row: rank, name, value -->
+        <DataTemplate x:Key="AppRowTemplate">
+            <Grid Margin="0,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="28" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding Rank}" Style="{StaticResource Label}" />
+                <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="15" TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
+                <TextBlock Grid.Column="2" Text="{Binding Value}" FontSize="16" FontStretch="SemiCondensed" />
+            </Grid>
+        </DataTemplate>
         <ItemsPanelTemplate x:Key="Row">
             <WrapPanel />
         </ItemsPanelTemplate>
@@ -206,6 +219,21 @@
         </Grid>
         <TextBlock DockPanel.Dock="Bottom" Margin="32,8,32,24" Style="{StaticResource Label}"
                    Text="Drag to move · Wheel to zoom · Keeps 24 h" />
+        <!-- CPU load and memory only: top apps at the hovered second -->
+        <Grid x:Name="Apps" DockPanel.Dock="Bottom" Margin="32,14,32,0" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="48" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="AppsTitle" Grid.ColumnSpan="3" Style="{StaticResource Label}" Margin="0,0,0,6" />
+            <ItemsControl x:Name="AppsLeft" Grid.Row="1" MinHeight="120" ItemTemplate="{StaticResource AppRowTemplate}" Focusable="False" />
+            <ItemsControl x:Name="AppsRight" Grid.Row="1" Grid.Column="2" ItemTemplate="{StaticResource AppRowTemplate}" Focusable="False" />
+        </Grid>
         <Border Background="{StaticResource Strip}" Margin="32,0">
             <local:TraceView x:Name="Expanded" ShowScale="True" Interactive="True" Cursor="SizeWE" />
         </Border>

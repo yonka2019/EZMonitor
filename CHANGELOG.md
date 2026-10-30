@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.2.0] : 2026-10-31
+- Expanded CPU load / Memory graph: top 10 apps table for the hovered second (24 h, `apps.bin`).
+- Zoomed-out hover snaps to the column peak.
+
 ## [v1.1.1] : 2026-10-29
 - Added CLAUDE.md dev notes.
 

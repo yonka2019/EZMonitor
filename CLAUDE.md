@@ -6,6 +6,8 @@ Windows hardware monitor. WPF, .NET 10 (`net10.0-windows`), C#, single project, 
 - `dotnet build` → `bin\Debug\net10.0-windows\EZMonitor.exe`
 - `dotnet publish -c Release -r win-x64 --self-contained` → `bin\Release\net10.0-windows\win-x64\publish\EZMonitor.exe` (single file, compressed)
 - Manifest = `requireAdministrator` → launching triggers UAC; run elevated.
+- SDK may be per-user only: `%LOCALAPPDATA%\Microsoft\dotnet\dotnet.exe` (not on PATH).
+- Unelevated run (selftest without UAC): `$env:__COMPAT_LAYER="RunAsInvoker"`.
 - `EZMonitor.exe --selftest` → exit 0 = pass; on fail writes `selftest.log` next to exe. Add a `Check(...)` in `SelfTest.cs` for new logic.
 - `EZMonitor.exe --snap out.png` → renders window after 12 s, exits. Use to verify layout visually.
 - `--tray` → start hidden (used by autostart task).
@@ -15,10 +17,11 @@ Windows hardware monitor. WPF, .NET 10 (`net10.0-windows`), C#, single project, 
 | File | Role |
 |---|---|
 | `App.xaml(.cs)` | Global brushes/styles (Paper/Strip/Ink/InkSoft, Bahnschrift, Chip, Icon). Startup args, single-instance, `--snap`. `ShutdownMode=OnExplicitShutdown`. |
-| `MainWindow.xaml(.cs)` | 8 tiles (2×4 `UniformGrid`) + bottom drives/fans bar + Settings popup + notice banner + full-window `Overlay` with expanded graph. Poll loop, history save, formatters (`Rate`, `TempText`, `Gb`, `Percent`). |
+| `MainWindow.xaml(.cs)` | 8 tiles (2×4 `UniformGrid`) + bottom drives/fans bar + Settings popup + notice banner + full-window `Overlay` with expanded graph. Poll loop, history save, formatters (`Rate`, `TempText`, `Gb`, `Percent`, `Share`, `Bytes`); `ShowApps` table. |
 | `Sensors.cs` | `Sensors.Read()` → `Snapshot` record (NaN = unavailable). LibreHardwareMonitorLib + `NetworkInterface` + `DriveInfo`. Not thread-safe; used only on poll thread. |
 | `Trace.cs` | `Series` ring buffer (float, NaN = gap, `AddGap`) + `Thermal` colour ramp (40° blue → 65° ochre → 85° red). |
-| `TraceView.cs` | Custom `FrameworkElement` strip chart, drawn in `OnRender`. Hover readout; tile = click/Enter → `Expand`; `Interactive` = drag pan, wheel zoom, arrows/+/-/End. One point per pixel column (column peak). |
+| `TraceView.cs` | Custom `FrameworkElement` strip chart, drawn in `OnRender`. Hover readout; tile = click/Enter → `Expand`; `Interactive` = drag pan, wheel zoom, arrows/+/-/End. One point per pixel column (column peak); hover snaps to that peak. `FocusAge` (hover or right edge) + `Changed` drive the apps table. |
+| `Apps.cs` | `AppSampler` (one `NtQuerySystemInformation` call/s, x64 struct offsets, CPU % from time delta keyed (pid, create time), private working set, summed by name, `.exe` stripped) + `AppHistory` (ring of top-10 CPU + top-10 RAM per second, `ushort` name ids; `apps.bin`, compacts names on save). |
 | `History.cs` | Binary save/load of all series to `%LOCALAPPDATA%\EZMonitor\history.bin` (temp file + move). Pads closed time with NaN. |
 | `Settings.cs` | `Settings` (JSON at `%APPDATA%\EZMonitor\settings.json`, only `CloseToTray`) + `Autostart` (schtasks logon task `EZMonitor`, XML, `HighestAvailable`, `--tray`). |
 | `Tray.cs` | WinForms `NotifyIcon`; tooltip CPU/GPU °C (≤127 chars); left click open, menu Open/Exit. |
@@ -33,6 +36,7 @@ Windows hardware monitor. WPF, .NET 10 (`net10.0-windows`), C#, single project, 
 - Close button: hides to tray if `CloseToTray`; real exit only via tray Exit (`_exiting`).
 - Poll errors skip one sample, never crash.
 - Expanded overlay copies the source tile's settings every tick (`CopyFrom`) since RAM/VRAM `Max` change.
+- Top apps table: only for `CpuLoadTrace`/`RamTrace` expanded. `AppHistory` is aligned by **age from newest** (not index) — gets the same `AddGap`/`Add` each tick; `Load` pads its own closed time. `ShowApps` skips redraw when `(ram, Added - age)` unchanged.
 
 ## Sensors notes
 - Needs admin + **PawnIO driver** (https://pawnio.eu) for CPU temp/clock/power and board fans; missing → `–` and a notice banner (`ShowNotice`). Detection: `LibreHardwareMonitor.PawnIo.PawnIo.IsInstalled`.
@@ -52,4 +56,4 @@ Windows hardware monitor. WPF, .NET 10 (`net10.0-windows`), C#, single project, 
 - Bump version in **both** `EZMonitor.csproj` `<Version>` and `app.manifest` `assemblyIdentity version` (x.y.z.0).
 - Add entry to `CHANGELOG.md` (`## [vX.Y.Z] : YYYY-MM-DD`, short bullets). Update `README.md`.
 - Commit `Release vX.Y.Z: ...`, tag `vX.Y.Z`. Remote: `github.com/yonka2019/EZMonitor` (branch `main`). No GitHub Releases created so far.
-- Current: v1.1.1 (2026-10-29).
+- Current: v1.2.0 (2026-10-31).

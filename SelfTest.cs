@@ -32,6 +32,31 @@ static class SelfTest
             pan.Follow(1);
             Check(pan.Offset == 3, "panned view stays on the same moment");
 
+            var sampler = new AppSampler();
+            var first = sampler.Read();
+            var self = System.Diagnostics.Process.GetCurrentProcess().ProcessName;
+            Check(first.Cpu.Count == 0 && first.Ram.Count == AppHistory.Top, "first app read: memory only, top 10");
+            Check(first.Ram.Zip(first.Ram.Skip(1)).All(p => p.First.Value >= p.Second.Value), "apps ranked highest first");
+            for (var spin = DateTime.UtcNow.AddMilliseconds(300); DateTime.UtcNow < spin;) { } // burn CPU so this app ranks
+            var second = sampler.Read();
+            Check(second.Cpu.Any(a => a.Name == self) && second.Cpu.All(a => a.Value is > 0 and <= 100), "app CPU share measured");
+            Check(AppSampler.Rank([new("a", 1), new("b", 0), new("c", 3)]).Select(a => a.Name).SequenceEqual(["c", "a"]), "rank drops zeros");
+
+            var apps = new AppHistory(3);
+            apps.Add(new([new("x", 5)], [new("y", 1e9f)]));
+            apps.AddGap(1);
+            apps.Add(new([new("z", 7), new("x", 2)], []));
+            Check(apps.At(0, false).Count == 2 && apps.At(0, false)[0] == new AppUse("z", 7) && apps.At(1, false).Count == 0, "app history keeps rankings per second");
+            Check(apps.At(2, true)[0] == new AppUse("y", 1e9f) && apps.At(3, false).Count == 0 && apps.Added == 3, "app history ages");
+            apps.Add(null);
+            Check(apps.Count == 3 && apps.At(2, false).Count == 0 && apps.At(1, false)[1].Name == "x", "app history wraps");
+            AppHistory.Save(file, apps.Copy(), now.AddSeconds(-5));
+            var back = new AppHistory(10);
+            back.Load(file, now);
+            System.IO.File.Delete(file);
+            Check(back.Count == 7 && back.At(5, false)[0] == new AppUse("z", 7) && back.At(0, true).Count == 0, "app history saves and pads closed time");
+            Check(MainWindow.Share(3.25f) == "3.3%" && MainWindow.Share(42f) == "42%" && MainWindow.Bytes(512 << 20) == "512 MB", "app value format");
+
             Check(MainWindow.Rate(float.NaN) == "–" && MainWindow.Rate(512_000) == "512 KB/s" && MainWindow.Rate(12_340_000) == "12.3 MB/s", "rate format");
             Check(MainWindow.TempText(54.4f) == "54°", "temp format");
             return 0;
