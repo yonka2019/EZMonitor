@@ -57,6 +57,12 @@ static class SelfTest
             Check(back.Count == 7 && back.At(5, false)[0] == new AppUse("z", 7) && back.At(0, true).Count == 0, "app history saves and pads closed time");
             Check(MainWindow.Share(3.25f) == "3.3%" && MainWindow.Share(42f) == "42%" && MainWindow.Bytes(512 << 20) == "512 MB", "app value format");
 
+            Check(MainWindow.AppRam(4f * (1 << 30), 32) == "4.0 GB · 13%" && MainWindow.AppRam(1 << 20, float.NaN) == "1 MB", "app memory share");
+            MainWindow.WriteLive(file, 8, 32, [new("qemu", 4f * (1 << 30))]);
+            var live = System.IO.File.ReadAllLines(file);
+            System.IO.File.Delete(file);
+            Check(live.Length == 3 && live[0].StartsWith("time\t") && live[1] == "ram\t8.0 GB of 32.0 GB · 25% used" && live[2] == "app\tqemu\t4.0 GB · 13%", "live file for the remote");
+
             Check(MainWindow.Rate(float.NaN) == "–" && MainWindow.Rate(512_000) == "512 KB/s" && MainWindow.Rate(12_340_000) == "12.3 MB/s", "rate format");
             Check(MainWindow.TempText(54.4f) == "54°", "temp format");
             return 0;

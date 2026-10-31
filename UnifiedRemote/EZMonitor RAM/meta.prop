@@ -1,0 +1,5 @@
+meta.name: EZMonitor RAM
+meta.author: Custom
+meta.description: RAM use + top 10 apps (needs EZMonitor running)
+meta.platform: windows
+meta.tags.category: utility

@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using System.IO;
 using System.Security.Principal;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -10,6 +11,9 @@ namespace EZMonitor;
 public partial class MainWindow : Window
 {
     const int HistorySeconds = 24 * 3600; // one sample per second
+    /// <summary>RAM + top memory apps, rewritten each second for the Unified Remote remote.</summary>
+    public static readonly string LiveFile = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "EZMonitor", "live.txt");
     const int SaveEvery = 5 * 60; // samples between history saves; the files are ≈3.5 + 10 MB
 
     readonly Settings _settings = Settings.Load();
@@ -139,7 +143,7 @@ public partial class MainWindow : Window
 
         var top = _apps.At(age, ram);
         AppsTitle.Text = $"Top apps by {(ram ? "memory" : "CPU")} · {TraceView.Ago(age)}" + (top.Count == 0 ? " · no data" : "");
-        var rows = top.Select((a, k) => new AppRow($"{k + 1}", a.Name, ram ? Bytes(a.Value) : Share(a.Value))).ToList();
+        var rows = top.Select((a, k) => new AppRow($"{k + 1}", a.Name, ram ? AppRam(a.Value, (float)RamTrace.Max) : Share(a.Value))).ToList();
         AppsLeft.ItemsSource = rows.Take(AppHistory.Top / 2).ToList();
         AppsRight.ItemsSource = rows.Skip(AppHistory.Top / 2).ToList();
     }
@@ -175,11 +179,26 @@ public partial class MainWindow : Window
                 AppTop? top;
                 try { top = apps.Read(); }
                 catch { top = null; } // no app list this second; the graphs still update
+                try { WriteLive(LiveFile, s.RamUsed, s.RamTotal, top?.Ram ?? []); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } // remote open mid-move: next second
                 await Dispatcher.InvokeAsync(() => Render(s, top));
             }
             while (await timer.WaitForNextTickAsync(_stop.Token));
         }
         catch (OperationCanceledException) { }
+    }
+
+    /// <summary>
+    /// Tab-separated lines: "time, unix s", "ram, text", then "app, name, text" per app, ready to show.
+    /// Temp file + move, so a reader never sees half a file.
+    /// </summary>
+    public static void WriteLive(string path, float used, float total, List<AppUse> apps)
+    {
+        var text = new StringBuilder($"time\t{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}\nram\t{Gb(used)} {Of(used, total)}\n");
+        foreach (var a in apps) text.Append($"app\t{a.Name}\t{AppRam(a.Value, total)}\n");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path + ".tmp", text.ToString());
+        File.Move(path + ".tmp", path, overwrite: true);
     }
 
     /// <summary>Copies on the UI thread, writes in the background.</summary>
@@ -262,6 +281,9 @@ public partial class MainWindow : Window
     static string Percent(float v) => float.IsNaN(v) ? "–" : $"{v:0}%";
     /// <summary>One app's CPU share: decimals only when small.</summary>
     public static string Share(float v) => v < 10 ? $"{v:0.0}%" : $"{v:0}%";
+    /// <summary>"3.2 GB · 13%": share of all RAM. Total in GB from the sensor (binary).</summary>
+    public static string AppRam(float bytes, float totalGb) =>
+        totalGb > 0 ? $"{Bytes(bytes)} · {Share(100 * bytes / (totalGb * (1 << 30)))}" : Bytes(bytes);
     /// <summary>Binary units, like Task Manager.</summary>
     public static string Bytes(float v) => v >= 1 << 30 ? $"{v / (1 << 30):0.0} GB" : $"{v / (1 << 20):0} MB";
     static string Watts(float w) => float.IsNaN(w) ? "" : $"{w:0} W";

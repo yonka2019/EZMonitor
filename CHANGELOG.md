@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.3.0] : 2026-10-31
+- Memory table: each app also shows its % of total RAM.
+- Unified Remote phone remote: live RAM + top 10 apps.
+
 ## [v1.2.0] : 2026-10-31
 - Expanded CPU load / Memory graph: top 10 apps table for the hovered second (24 h, `apps.bin`).
 - Zoomed-out hover snaps to the column peak.

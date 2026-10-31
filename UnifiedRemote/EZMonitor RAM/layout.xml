@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout>
+  <grid>
+    <row weight="wrap">
+      <label id="ram" text="Loading..." weight="3" />
+      <button icon="refresh" onTap="refresh" weight="1" />
+    </row>
+    <row>
+      <list id="apps" />
+    </row>
+  </grid>
+</layout>

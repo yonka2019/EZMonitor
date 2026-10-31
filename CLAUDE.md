@@ -22,6 +22,7 @@ Windows hardware monitor. WPF, .NET 10 (`net10.0-windows`), C#, single project, 
 | `Trace.cs` | `Series` ring buffer (float, NaN = gap, `AddGap`) + `Thermal` colour ramp (40° blue → 65° ochre → 85° red). |
 | `TraceView.cs` | Custom `FrameworkElement` strip chart, drawn in `OnRender`. Hover readout; tile = click/Enter → `Expand`; `Interactive` = drag pan, wheel zoom, arrows/+/-/End. One point per pixel column (column peak); hover snaps to that peak. `FocusAge` (hover or right edge) + `Changed` drive the apps table. |
 | `Apps.cs` | `AppSampler` (one `NtQuerySystemInformation` call/s, x64 struct offsets, CPU % from time delta keyed (pid, create time), private working set, summed by name, `.exe` stripped) + `AppHistory` (ring of top-10 CPU + top-10 RAM per second, `ushort` name ids; `apps.bin`, compacts names on save). |
+| `UnifiedRemote/EZMonitor RAM/` | Unified Remote custom remote (`meta.prop`, `layout.xml`, `remote.lua`). Reads `live.txt` every 2 s while focused (`libs.timer`, `libs.fs`); stale > 5 s → "EZMonitor not running". Installed copy: `C:\ProgramData\Unified Remote\Remotes\Custom\EZMonitor RAM` (re-copy after edits, Reload remotes). |
 | `History.cs` | Binary save/load of all series to `%LOCALAPPDATA%\EZMonitor\history.bin` (temp file + move). Pads closed time with NaN. |
 | `Settings.cs` | `Settings` (JSON at `%APPDATA%\EZMonitor\settings.json`, only `CloseToTray`) + `Autostart` (schtasks logon task `EZMonitor`, XML, `HighestAvailable`, `--tray`). |
 | `Tray.cs` | WinForms `NotifyIcon`; tooltip CPU/GPU °C (≤127 chars); left click open, menu Open/Exit. |
@@ -36,6 +37,7 @@ Windows hardware monitor. WPF, .NET 10 (`net10.0-windows`), C#, single project, 
 - Close button: hides to tray if `CloseToTray`; real exit only via tray Exit (`_exiting`).
 - Poll errors skip one sample, never crash.
 - Expanded overlay copies the source tile's settings every tick (`CopyFrom`) since RAM/VRAM `Max` change.
+- `WriteLive` (poll thread, each second): `%ProgramData%\EZMonitor\live.txt`, tab lines `time`/`ram`/`app`, pre-formatted text (remote shows as-is). Temp + move; IO errors skipped. Format change → update `remote.lua` too.
 - Top apps table: only for `CpuLoadTrace`/`RamTrace` expanded. `AppHistory` is aligned by **age from newest** (not index) — gets the same `AddGap`/`Add` each tick; `Load` pads its own closed time. `ShowApps` skips redraw when `(ram, Added - age)` unchanged.
 
 ## Sensors notes
@@ -56,4 +58,4 @@ Windows hardware monitor. WPF, .NET 10 (`net10.0-windows`), C#, single project, 
 - Bump version in **both** `EZMonitor.csproj` `<Version>` and `app.manifest` `assemblyIdentity version` (x.y.z.0).
 - Add entry to `CHANGELOG.md` (`## [vX.Y.Z] : YYYY-MM-DD`, short bullets). Update `README.md`.
 - Commit `Release vX.Y.Z: ...`, tag `vX.Y.Z`. Remote: `github.com/yonka2019/EZMonitor` (branch `main`). No GitHub Releases created so far.
-- Current: v1.2.0 (2026-10-31).
+- Current: v1.3.0 (2026-10-31).
